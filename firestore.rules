@@ -1,0 +1,263 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: colleges
+    // Fields:
+    //   - name: string (required)
+    //   - adminEmail: string (required, email)
+    //   - trialEndDate: string (required, ISO date)
+    //   - isPremium: bool (required)
+    //
+    // Collection: users
+    // Fields:
+    //   - name: string (required)
+    //   - email: string (required, email)
+    //   - role: string (required, enum: admin, teacher, student)
+    //   - collegeId: string (required)
+    //   - photoURL: string (optional)
+    //
+    // Collection: classes
+    // Fields:
+    //   - name: string (required)
+    //   - teacherId: string (required)
+    //   - collegeId: string (required)
+    //   - activeSession: map (optional)
+    //   - radius: number (optional)
+    //
+    // Collection: attendance
+    // Fields:
+    //   - studentId: string (required)
+    //   - classId: string (required)
+    //   - timestamp: string (required, ISO date)
+    //   - lat: number (required)
+    //   - lng: number (required)
+    //   - sessionId: string (required)
+    //
+    // Collection: class_students
+    // Fields:
+    //   - classId: string (required)
+    //   - studentId: string (required)
+    //   - collegeId: string (required)
+    //
+    // Collection: sessions
+    // Fields:
+    //   - classId: string (required)
+    //   - startTime: string (required, ISO date)
+    //   - endTime: string (optional, ISO date)
+    //   - lat: number (required)
+    //   - lng: number (required)
+    //
+    // Collection: grades
+    // Fields:
+    //   - studentId: string (required)
+    //   - classId: string (required)
+    //   - teacherId: string (required)
+    //   - title: string (required)
+    //   - type: string (required, enum: assignment, exam)
+    //   - score: number (required)
+    //   - maxScore: number (required)
+    //   - timestamp: string (required, ISO date)
+    //
+    // Collection: payment_requests
+    // Fields:
+    //   - collegeId: string (required)
+    //   - collegeName: string (required)
+    //   - plan: string (required)
+    //   - amount: number (required)
+    //   - transactionId: string (required)
+    //   - status: string (required, enum: pending, approved, rejected)
+    //   - timestamp: string (required, ISO date)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && 
+        request.auth.token.email == "aayush.23102008@gmail.com" && 
+        request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSuperAdmin() || (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin');
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && getUserData().role == 'teacher';
+    }
+
+    function isStudent() {
+      return isAuthenticated() && getUserData().role == 'student';
+    }
+
+    function sameCollege(collegeId) {
+      return isAuthenticated() && getUserData().collegeId == collegeId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidCollege(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.adminEmail) &&
+             data.trialEndDate is string &&
+             data.isPremium is bool;
+    }
+
+    function isValidUser(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'teacher', 'student'] &&
+             data.collegeId is string &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 1000000));
+    }
+
+    function isValidClass(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.teacherId is string &&
+             data.collegeId is string &&
+             (!('radius' in data) || (data.radius is number && data.radius >= 10 && data.radius <= 500)) &&
+             (!('deleted' in data) || data.deleted is bool);
+    }
+
+    function isValidAttendance(data) {
+      return data.studentId is string &&
+             data.classId is string &&
+             data.timestamp is string &&
+             data.lat is number &&
+             data.lng is number &&
+             data.sessionId is string;
+    }
+
+    function isValidClassStudent(data) {
+      return data.classId is string &&
+             data.studentId is string &&
+             data.collegeId is string;
+    }
+
+    function isValidSession(data) {
+      return data.classId is string &&
+             data.startTime is string &&
+             data.lat is number &&
+             data.lng is number &&
+             (!('endTime' in data) || data.endTime is string);
+    }
+
+    function isValidGrade(data) {
+      return data.studentId is string &&
+             data.classId is string &&
+             data.teacherId is string &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.type in ['assignment', 'exam'] &&
+             data.score is number && data.score >= 0 &&
+             data.maxScore is number && data.maxScore > 0 &&
+             data.timestamp is string;
+    }
+
+    function isValidPaymentRequest(data) {
+      return data.collegeId is string &&
+             data.collegeName is string &&
+             data.plan is string &&
+             data.amount is number &&
+             data.transactionId is string &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.timestamp is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /colleges/{collegeId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || isAdmin() || sameCollege(collegeId));
+      allow create: if isAuthenticated() && isValidCollege(request.resource.data) && request.resource.data.adminEmail == request.auth.token.email;
+      allow update: if (isSuperAdmin() || (isAdmin() && sameCollege(collegeId))) && isValidCollege(request.resource.data);
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || isOwner(userId) || sameCollege(resource.data.collegeId));
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        (isOwner(userId) && request.resource.data.role == 'admin') || 
+        (isAdmin() && sameCollege(request.resource.data.collegeId)) ||
+        (isTeacher() && sameCollege(request.resource.data.collegeId) && request.resource.data.role == 'student')
+      );
+      allow update: if (isSuperAdmin() || isOwner(userId) || (isAdmin() && sameCollege(resource.data.collegeId))) && isValidUser(request.resource.data);
+    }
+
+    match /classes/{classId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || sameCollege(resource.data.collegeId));
+      allow create: if (isAdmin() || isTeacher()) && isValidClass(request.resource.data) && sameCollege(request.resource.data.collegeId);
+      allow update: if (isSuperAdmin() || isAdmin() || (isTeacher() && resource.data.teacherId == request.auth.uid)) && isValidClass(request.resource.data);
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isOwner(resource.data.studentId) || 
+        isAdmin() || 
+        (isTeacher() && get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.teacherId == request.auth.uid)
+      );
+      allow create: if isStudent() && isValidAttendance(request.resource.data) && isOwner(request.resource.data.studentId);
+    }
+
+    match /class_students/{enrollmentId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || sameCollege(resource.data.collegeId));
+      allow create: if (isAdmin() || isTeacher()) && isValidClassStudent(request.resource.data) && sameCollege(request.resource.data.collegeId);
+      allow delete: if (isSuperAdmin() || isAdmin() || isTeacher()) && sameCollege(resource.data.collegeId);
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create: if (isSuperAdmin() || isTeacher()) && isValidSession(request.resource.data) && (isSuperAdmin() || get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.teacherId == request.auth.uid);
+      allow update: if (isSuperAdmin() || isTeacher()) && isValidSession(request.resource.data) && (isSuperAdmin() || get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.teacherId == request.auth.uid);
+    }
+
+    match /grades/{gradeId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        isOwner(resource.data.studentId) || 
+        isAdmin() || 
+        (isTeacher() && resource.data.teacherId == request.auth.uid)
+      );
+      allow create: if (isSuperAdmin() || isTeacher()) && isValidGrade(request.resource.data) && 
+                      (isSuperAdmin() || (request.resource.data.teacherId == request.auth.uid &&
+                      get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.teacherId == request.auth.uid));
+      allow update: if (isSuperAdmin() || isTeacher()) && isValidGrade(request.resource.data) && (isSuperAdmin() || resource.data.teacherId == request.auth.uid);
+      allow delete: if (isSuperAdmin() || isTeacher()) && (isSuperAdmin() || resource.data.teacherId == request.auth.uid);
+    }
+
+    match /payment_requests/{requestId} {
+      allow read: if isAuthenticated() && (isSuperAdmin() || (isAdmin() && sameCollege(resource.data.collegeId)));
+      allow create: if isAdmin() && isValidPaymentRequest(request.resource.data) && sameCollege(request.resource.data.collegeId);
+      allow update: if isSuperAdmin() && isValidPaymentRequest(request.resource.data);
+    }
+  }
+}

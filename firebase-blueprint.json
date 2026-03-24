@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "College": {
+      "title": "College",
+      "description": "Represents a college registered in the system.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the college" },
+        "adminEmail": { "type": "string", "format": "email", "description": "Email of the college administrator" },
+        "trialEndDate": { "type": "string", "format": "date-time", "description": "End date of the 14-day free trial" },
+        "isPremium": { "type": "boolean", "description": "Whether the college has a premium subscription" }
+      },
+      "required": ["name", "adminEmail", "trialEndDate", "isPremium"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user within a college (Admin, Teacher, or Student).",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "description": "User's email" },
+        "name": { "type": "string", "description": "User's full name" },
+        "role": { "type": "string", "enum": ["admin", "teacher", "student"], "description": "User's role" },
+        "collegeId": { "type": "string", "description": "ID of the college the user belongs to" },
+        "photoURL": { "type": "string", "description": "URL of the user's profile picture" }
+      },
+      "required": ["email", "name", "role", "collegeId"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "A class or subject managed by a teacher.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the class" },
+        "teacherId": { "type": "string", "description": "ID of the teacher" },
+        "collegeId": { "type": "string", "description": "ID of the college" },
+        "activeSession": {
+          "type": "object",
+          "properties": {
+            "startTime": { "type": "string", "format": "date-time" },
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
+        "radius": { "type": "number", "description": "Geofencing radius for attendance in meters" },
+        "deleted": { "type": "boolean", "description": "Whether the class is deleted" }
+      },
+      "required": ["name", "teacherId", "collegeId"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "A record of a student's attendance for a class session.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "description": "ID of the student" },
+        "classId": { "type": "string", "description": "ID of the class" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Time of attendance" },
+        "lat": { "type": "number", "description": "Latitude of the student when marking attendance" },
+        "lng": { "type": "number", "description": "Longitude of the student when marking attendance" },
+        "sessionId": { "type": "string", "description": "ID of the class session" }
+      },
+      "required": ["studentId", "classId", "timestamp", "lat", "lng", "sessionId"]
+    },
+    "ClassStudent": {
+      "title": "ClassStudent",
+      "description": "Represents a student's enrollment in a specific class.",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string", "description": "ID of the class" },
+        "studentId": { "type": "string", "description": "ID of the student" },
+        "collegeId": { "type": "string", "description": "ID of the college" }
+      },
+      "required": ["classId", "studentId", "collegeId"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "A specific instance of a class being held.",
+      "type": "object",
+      "properties": {
+        "classId": { "type": "string", "description": "ID of the class" },
+        "startTime": { "type": "string", "format": "date-time", "description": "Start time of the session" },
+        "endTime": { "type": "string", "format": "date-time", "description": "End time of the session" },
+        "lat": { "type": "number", "description": "Latitude of the session location" },
+        "lng": { "type": "number", "description": "Longitude of the session location" }
+      },
+      "required": ["classId", "startTime", "lat", "lng"]
+    },
+    "Grade": {
+      "title": "Grade",
+      "description": "A student's grade for an assignment or exam in a class.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "description": "ID of the student" },
+        "classId": { "type": "string", "description": "ID of the class" },
+        "teacherId": { "type": "string", "description": "ID of the teacher who gave the grade" },
+        "title": { "type": "string", "description": "Title of the assignment or exam" },
+        "type": { "type": "string", "enum": ["assignment", "exam"], "description": "Type of the grade" },
+        "score": { "type": "number", "description": "The score achieved" },
+        "maxScore": { "type": "number", "description": "The maximum possible score" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the grade was recorded" }
+      },
+      "required": ["studentId", "classId", "teacherId", "title", "type", "score", "maxScore", "timestamp"]
+    },
+    "PaymentRequest": {
+      "title": "PaymentRequest",
+      "description": "A request for a premium subscription upgrade.",
+      "type": "object",
+      "properties": {
+        "collegeId": { "type": "string", "description": "ID of the college" },
+        "collegeName": { "type": "string", "description": "Name of the college" },
+        "plan": { "type": "string", "description": "Subscription plan name" },
+        "amount": { "type": "number", "description": "Payment amount" },
+        "transactionId": { "type": "string", "description": "Transaction reference ID" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"], "description": "Status of the request" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the request was made" }
+      },
+      "required": ["collegeId", "collegeName", "plan", "amount", "transactionId", "status", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/colleges/{collegeId}": {
+      "schema": "College",
+      "description": "Collection of colleges"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of users"
+    },
+    "/classes/{classId}": {
+      "schema": "Class",
+      "description": "Collection of classes"
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Collection of attendance records"
+    },
+    "/class_students/{enrollmentId}": {
+      "schema": "ClassStudent",
+      "description": "Collection of student enrollments in classes"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "Collection of class sessions"
+    },
+    "/grades/{gradeId}": {
+      "schema": "Grade",
+      "description": "Collection of student grades"
+    },
+    "/payment_requests/{requestId}": {
+      "schema": "PaymentRequest",
+      "description": "Collection of subscription payment requests"
+    }
+  }
+}

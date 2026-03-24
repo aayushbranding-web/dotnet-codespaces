@@ -1,0 +1,5 @@
+{
+  "name": "Attendora AI",
+  "description": "A smart attendance management system for colleges featuring geofencing-based attendance tracking, teacher-student registration, and a 14-day free trial.",
+  "requestFramePermissions": ["geolocation"]
+}
